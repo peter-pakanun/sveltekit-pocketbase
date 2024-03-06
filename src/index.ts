@@ -134,17 +134,17 @@ export default class SvelteKitPocketBase {
     const clientAuthStore = (await request.json()) as SyncJsonType
 
     if (this.pb.authStore.isValid == clientAuthStore.isValid) {
-      console.log('No update needed')
+      // console.log('No update needed')
       return json({
         hasUpdate: false
       })
     }
 
     if (clientAuthStore.isValid) {
-      console.log('Client is valid, updating server...')
+      // console.log('Client is valid, updating server...')
       this.pb.authStore.save(clientAuthStore.token || '', clientAuthStore.model)
       if (this.pb.authStore.isValid) {
-        console.log('Server is now valid')
+        // console.log('Server is now valid')
         const response = json({
           hasUpdate: false
         })
@@ -153,7 +153,7 @@ export default class SvelteKitPocketBase {
       }
     }
 
-    console.log('Client is not valid afterall, logging out...')
+    // console.log('Client is not valid afterall, logging out...')
     this.pb.authStore.clear()
 
     // in case we need to update, we can just update the client's auth store with the latest state
@@ -185,7 +185,7 @@ export default class SvelteKitPocketBase {
    * Client code for syncing the auth state with the server
    */
   private async authSync(): Promise<void> {
-    console.log('Syncing auth')
+    // console.log('Syncing auth')
     const response = (await fetch(this.syncRoute, {
       method: 'POST',
       headers: {
