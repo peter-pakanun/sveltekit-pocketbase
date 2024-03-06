@@ -1,0 +1,33 @@
+{
+  "name": "sveltekit-pocketbase",
+  "version": "1.0.0",
+  "description": "A SvelteKit adapter for PocketBase that work on both SSR & CSR mode",
+  "main": "./dist/index",
+  "types": "./dist/index",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "eslint --ext .ts src/**",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run lint && tsup src/index.ts --dts --format cjs,esm"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.54.1",
+    "@typescript-eslint/parser": "^5.54.1",
+    "eslint": "^8.36.0",
+    "eslint-config-prettier": "^8.7.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "prettier": "^2.8.4",
+    "tsup": "^6.6.3",
+    "typescript": "^4.9.5"
+  },
+  "dependencies": {
+    "@sveltejs/kit": "^2.0.0",
+    "esm-env-robust": "^0.0.3",
+    "pocketbase": "^0.21.1",
+    "svelte": "^4.2.12"
+  }
+}
