@@ -93,19 +93,22 @@ export default class SvelteKitPocketBase {
    * It take handle's input and return a response or false if the hook is not handled
    *
    * @example
-   * Inside `src/hooks.server.js/ts`:
    * ```js
-   * import { db } from '$lib/db';
+   * // src/hooks.server.js
+   * import { hookHandler } from "$lib/db";
    * export async function handle({ event, resolve }) {
-   *   let response = await db.handleHook({ event, resolve });
-   *   if (!response) {
-   *     response = await resolve(event);
+   *   let response = await hookHandler({ event, resolve });
+   *   if (response !== false) {
+   *     return response;
    *   }
+   *
+   *   response = await resolve(event);
+   *
    *   return response;
    * }
    * ```
    */
-  handleHook: HandleHookT = async ({ event }) => {
+  hookHandler: HandleHookT = async ({ event }) => {
     // load the store data from the request cookie string
     this.pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '')
 

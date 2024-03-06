@@ -11,8 +11,25 @@
     "format": "prettier --write .",
     "lint": "eslint --ext .ts src/**",
     "typecheck": "tsc --noEmit",
-    "build": "npm run lint && tsup src/index.ts --dts --format cjs,esm"
+    "build": "npm run lint && tsup src/index.ts --dts --format cjs,esm",
+    "prepublishOnly": "npm run build"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/peter-pakanun/sveltekit-pocketbase.git"
+  },
+  "keywords": [
+    "sveltekit",
+    "pocketbase",
+    "ssr",
+    "csr"
+  ],
+  "author": "Peter Pakanun",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/peter-pakanun/sveltekit-pocketbase/issues"
+  },
+  "homepage": "https://github.com/peter-pakanun/sveltekit-pocketbase#readme",
   "devDependencies": {
     "@types/node": "^18.0.0",
     "@typescript-eslint/eslint-plugin": "^5.54.1",
