@@ -129,6 +129,8 @@ export default class SvelteKitPocketBase {
       // return await this.handleLogout()
     }
 
+    event.locals.user = this.pb.authStore.model
+
     return false
   }
 
