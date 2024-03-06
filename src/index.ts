@@ -69,20 +69,22 @@ export default class SvelteKitPocketBase {
     // Setup the user store
     if (BROWSER) this.authSync()
 
-    const { subscribe, set, update } = writable(this.pb.authStore.model)
+    const { subscribe, set, update } = writable<AuthModel>(null)
     this.user = {
       subscribe,
       set: async (value: AuthModel): Promise<void> => {
-        if (this.pb.authStore.model === value) return
-        if (value === null) {
-          // this is a logout
-          await this.authSync()
+        // if (this.pb.authStore.model === value) return
+        if (BROWSER) {
+          if (value === null) {
+            // this is a logout
+            await this.authSync()
+          }
+          if (value !== null) {
+            // this is a login, update the server
+            await this.authSync()
+          }
         }
-        if (value !== null) {
-          // this is a login, update the server
-          await this.authSync()
-        }
-        return set(this.pb.authStore.model)
+        return set(value)
       },
       update
     }
