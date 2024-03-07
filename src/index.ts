@@ -93,7 +93,7 @@ export default class SvelteKitPocketBase {
    * Get the PocketBase instance.
    * This is to avoid Cloudflare Workers' limitations on shared I/O.
    */
-  getPB(): PocketBase {
+  getPB = (): PocketBase => {
     if (BROWSER) {
       return this.pb
     }
