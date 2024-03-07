@@ -36,12 +36,13 @@
 
   const pbAdapter = new SvelteKitPocketBase({
     pbBaseUrl: "http://127.0.0.1:8090", // pocketbase server base url
-    syncRoute: "/users/sync", // Route to use internally for authentication syncing
+    syncRoute: "/users/sync", // Route used internally for authentication syncing
   })
 
   export const pb = pbAdapter.pb;
   export const user = pbAdapter.user;
   export const handleHook = pbAdapter.handleHook;
+  export const hookFetchHandler = pbAdapter.hookFetchHandler;
   ```
   > You can types the `pb` instance by type assertion using (TypeScript)[https://github.com/pocketbase/js-sdk?tab=readme-ov-file#specify-typescript-definitions] or JSDoc comments like this:
   ```javascript
@@ -66,9 +67,9 @@
   export const pb = pbAdapter.pb;
   ```
 
-  Create `src/hooks.server.js` file if not already exists and put in the hook handler.
+  Create `src/hooks.server.js` file if not already exists and put in the handlers.
   ```javascript
-  import { hookHandler } from '$lib/db';
+  import { hookHandler, hookFetchHandler } from "$lib/db";
 
   /** @type {import('@sveltejs/kit').Handle} */
   export async function handle({ event, resolve }) {
@@ -81,11 +82,21 @@
 
     return response;
   }
+
+  /** @type {import('@sveltejs/kit').HandleFetch} */
+  export async function handleFetch({ event, request, fetch }) {
+    let response = await hookFetchHandler({ event, request, fetch });
+    if (response !== false) {
+      return response;
+    }
+
+    return fetch(request);
+  }
   ```
 
-  This library put authModel into server's `locals` object, so you need to define it in `src/app.d.ts` file.
+  This library put PocketBase client into server's `locals` object, so you need to define it in `src/app.d.ts` file.
   ```typescript
-  import { type AuthModel } from 'pocketbase'
+  import PocketBase from 'pocketbase';
 
   // See https://kit.svelte.dev/docs/types#app
   // for information about these interfaces
@@ -93,7 +104,7 @@
     namespace App {
       // interface Error {}
       interface Locals {
-        user: AuthModel
+        pb: PocketBase;
       }
       // interface PageData {}
       // interface PageState {}
@@ -107,7 +118,7 @@
 ## Svelte Store
 
   This library comes with a Svelte store to manage the user state.
-  Beware, the store on the server is shared, so you should not use the store directly in the server. More infomation can be found in the [SvelteKit documentation](https://kit.svelte.dev/docs/state-management#using-stores-with-context).
+  Beware, the store on the server is shared across all client, so you should not use the store directly in the server. More infomation can be found in the [SvelteKit documentation](https://kit.svelte.dev/docs/state-management#using-stores-with-context).
   Here's an example of one way to access the store safely:
   ```javascript
   // +layout.server.js
@@ -115,7 +126,7 @@
   /** @type {import('./$types').LayoutServerLoad} */
   export async function load({ locals }) {
     return {
-      user: locals.user,
+      user: locals.pb.authStore.model,
     };
   }
   ```
@@ -155,15 +166,17 @@
   You can use the `pb` instance to interact with PocketBase in both SSR and CSR environments.
   Refer to the [PocketBase JavaScript SDK](https://github.com/pocketbase/js-sdk) for more information.
 
+  Don't forget to supply SvelteKit `fetch` object so the library can attach authentication headers to the request by the server.
+
   Example Loading Data:
   ```javascript
   // src/routes/+page.js
   import { pb } from '$lib/db';
 
   /** @type {import('./$types').PageLoad} */
-  export async function load() {
+  export async function load({ fetch }) {
     return {
-      items: (await pb.collection('posts').getList(1, 20)).items,
+      items: (await pb.collection('posts').getList(1, 20, { fetch })).items,
     };
   };
   ```
@@ -172,13 +185,19 @@
   <script>
     /** @type {import('@sveltejs/kit').Load} */
     export let data;
-    $: console.log(data);
   </script>
+
+  {#each data.items as item}
+    <div>
+      <h1>{item.id}</h1>
+      <p>{item.test}</p>
+    </div>
+  {/each}
   ```
   ```
   > [ { id: '1', title: 'test', active: true } ]
   ```
-  In this example, the data loading was performed in `+page.js` which can be run in both SSR and CSR environments. If the user access the page for the first time, the data will be loaded in the server using client's cookie to authenticate with pocketbase API, rendered and sent to the client. If the user navigates to the page from another page within the app, the data will be fetched from the client directly.
+  In this example, the data loading was performed in `+page.js` which can be run in both SSR and CSR environments. If the user access the page for the first time, the data will be loaded in the server using client's cookie to authenticate with PocketBase API, rendered and sent to the client. But if users navigates to the page from another page within the app, the data will be fetched by the browser directly.
 
 ## Authentication
 

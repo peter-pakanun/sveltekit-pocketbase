@@ -16,7 +16,7 @@ interface SvelteKitPocketBaseConfig {
   pbBaseUrl?: string
 
   /**
-   * Route to use internally for authentication syncing
+   * Route used internally for authentication syncing
    * @default '/users/sync'
    */
   syncRoute?: string
