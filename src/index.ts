@@ -74,6 +74,11 @@ export default class SvelteKitPocketBase {
       this.userStore.set(model)
     })
 
+    if (!BROWSER) {
+      // Disable auto cancellation on the server
+      this.pb.autoCancellation(false)
+    }
+
     this.userStore = writable<AuthModel>(this.pb.authStore.model)
     this.user = {
       subscribe: this.userStore.subscribe
