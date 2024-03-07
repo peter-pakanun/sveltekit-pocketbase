@@ -22,9 +22,15 @@ interface SvelteKitPocketBaseConfig {
   syncRoute?: string
 }
 
-type HandleHookT = (input: {
+type HookHandlerT = (input: {
   event: RequestEvent
   resolve(event: RequestEvent, opts?: ResolveOptions): MaybePromise<Response>
+}) => MaybePromise<Response | false>
+
+type HookFetchHandlerT = (input: {
+  event: RequestEvent
+  request: Request
+  fetch: typeof fetch
 }) => MaybePromise<Response | false>
 
 type SyncJsonType = {
@@ -66,12 +72,14 @@ export default class SvelteKitPocketBase {
     this.syncRoute = syncRoute
 
     this.pb = new PocketBase(pbBaseUrl)
-    this.pb.authStore.onChange(async (_token, model) => {
-      if (BROWSER) {
+
+    if (BROWSER) {
+      // Auto update the user store in the browser
+      this.pb.authStore.onChange(async (_token, model) => {
         await this.authSync()
-      }
-      this.user.set(model)
-    })
+        this.user.set(model)
+      })
+    }
 
     if (!BROWSER) {
       // Disable auto cancellation on the server
@@ -101,32 +109,40 @@ export default class SvelteKitPocketBase {
    * }
    * ```
    */
-  hookHandler: HandleHookT = async ({ event }) => {
+  hookHandler: HookHandlerT = async ({ event }) => {
+    event.locals.pb = new PocketBase(this.pb.baseUrl)
+
     // load the store data from the request cookie string
-    this.pb.authStore.loadFromCookie(event.request.headers.get('cookie') || '')
+    event.locals.pb.authStore.loadFromCookie(
+      event.request.headers.get('cookie') || ''
+    )
 
     try {
       // get an up-to-date auth store state by verifying and refreshing the loaded auth model (if any)
-      this.pb.authStore.isValid &&
-        (await this.pb.collection('users').authRefresh())
+      event.locals.pb.authStore.isValid &&
+        (await event.locals.pb.collection('users').authRefresh())
     } catch (_) {
       // clear the auth store on failed refresh
-      this.pb.authStore.clear()
+      event.locals.pb.authStore.clear()
     }
 
-    event.locals.user = this.pb.authStore.model
+    this.user.set(event.locals.pb.authStore.model)
 
     if (event.url.pathname.startsWith(this.syncRoute)) {
       return await this.handleSync(event)
     }
 
+    // clear the auth store if the user is not valid
     return false
   }
 
-  private async handleSync({ request }: RequestEvent): Promise<Response> {
+  private async handleSync({
+    request,
+    locals
+  }: RequestEvent): Promise<Response> {
     const clientAuthStore = (await request.json()) as SyncJsonType
 
-    if (this.pb.authStore.isValid == clientAuthStore.isValid) {
+    if (locals.pb.authStore.isValid == clientAuthStore.isValid) {
       // console.log('No update needed')
       return json({
         hasUpdate: false
@@ -135,33 +151,34 @@ export default class SvelteKitPocketBase {
 
     if (clientAuthStore.isValid) {
       // console.log('Client is valid, updating server...')
-      this.pb.authStore.save(clientAuthStore.token || '', clientAuthStore.model)
-      if (this.pb.authStore.isValid) {
+      locals.pb.authStore.save(
+        clientAuthStore.token || '',
+        clientAuthStore.model
+      )
+      if (locals.pb.authStore.isValid) {
         // console.log('Server is now valid')
         const response = json({
           hasUpdate: false
         })
-        this.addCookie(response)
+        response.headers.append(
+          'set-cookie',
+          locals.pb.authStore.exportToCookie()
+        )
         return response
       }
     }
 
     // console.log('Client is not valid afterall, logging out...')
-    this.pb.authStore.clear()
+    locals.pb.authStore.clear()
 
     // in case we need to update, we can just update the client's auth store with the latest state
     const response = json({
       hasUpdate: true,
-      token: this.pb.authStore.token,
-      model: this.pb.authStore.model
+      token: locals.pb.authStore.token,
+      model: locals.pb.authStore.model
     })
-    this.addCookie(response)
+    response.headers.append('set-cookie', locals.pb.authStore.exportToCookie())
 
-    return response
-  }
-
-  private addCookie(response: Response): Response {
-    response.headers.append('set-cookie', this.pb.authStore.exportToCookie())
     return response
   }
 
@@ -187,5 +204,32 @@ export default class SvelteKitPocketBase {
     }
 
     return true
+  }
+
+  /**
+   * Hook for SvelteKit to handle fetch requests
+   * It take handleFetch's input and return a response or false if the hook is not handled
+   *
+   * @example
+   * ```js
+   * // src/hooks.server.js
+   * import { hookFetchHandler } from "$lib/db";
+   * export async function handleFetch({ event, request, fetch }) {
+   *   let response = await hookFetchHandler({ event, request, fetch });
+   *   if (response !== false) {
+   *     return response;
+   *   }
+   *
+   *   return fetch(request);
+   * }
+   * ```
+   */
+  hookFetchHandler: HookFetchHandlerT = async ({ event, request, fetch }) => {
+    if (request.url.startsWith(event.locals.pb.baseUrl)) {
+      request.headers.set('Authorization', event.locals.pb.authStore.token)
+      return fetch(request)
+    }
+
+    return false
   }
 }
