@@ -5,7 +5,7 @@ import {
   type RequestEvent,
   type ResolveOptions
 } from '@sveltejs/kit'
-import { writable, type Writable } from 'svelte/store'
+import { writable, type Writable, type Readable } from 'svelte/store'
 import { BROWSER } from 'esm-env-robust'
 
 interface SvelteKitPocketBaseConfig {
@@ -36,23 +36,24 @@ type SyncJsonType = {
 
 export default class SvelteKitPocketBase {
   /**
-   * The PocketBase instance
-   * You can use this to access the PocketBase API
-   * This library comes with a `user` store that is synced with the `pb.authStore.model`
+   * The PocketBase instance.
+   * You can use this to access the PocketBase API.
    *
-   * Note:
-   * - To logout, set the user store to `null`
-   * - To login, you can use the `pb.collection('users').authWithXXX` as usual
-   *   and then set the user store to the returned model
+   * @see {@link https://github.com/pocketbase/js-sdk | PocketBase JS SDK}
    */
   pb: PocketBase
-  user: Writable<AuthModel>
-
-  private syncRoute: string
-  private logoutRoute = '/users/logout'
 
   /**
-   * Create a new SvelteKitPocketBase instance
+   * The user store.
+   * This store is synced with the `pb.authStore.model`
+   */
+  user: Readable<AuthModel>
+
+  private userStore: Writable<AuthModel>
+  private syncRoute: string
+
+  /**
+   * Create a new SvelteKitPocketBase instance.
    *
    * @param options options for the SvelteKitPocketBase
    */
@@ -63,30 +64,19 @@ export default class SvelteKitPocketBase {
     }
     const { pbBaseUrl, syncRoute } = { ...defaultOptions, ...options }
 
-    this.pb = new PocketBase(pbBaseUrl)
     this.syncRoute = syncRoute
 
-    // Setup the user store
-    if (BROWSER) this.authSync()
+    this.pb = new PocketBase(pbBaseUrl)
+    this.pb.authStore.onChange(async (_token, model) => {
+      if (BROWSER) {
+        await this.authSync()
+      }
+      this.userStore.set(model)
+    })
 
-    const { subscribe, set, update } = writable<AuthModel>(null)
+    this.userStore = writable<AuthModel>(this.pb.authStore.model)
     this.user = {
-      subscribe,
-      set: async (value: AuthModel): Promise<void> => {
-        // if (this.pb.authStore.model === value) return
-        if (BROWSER) {
-          if (value === null) {
-            // this is a logout
-            await this.authSync()
-          }
-          if (value !== null) {
-            // this is a login, update the server
-            await this.authSync()
-          }
-        }
-        return set(value)
-      },
-      update
+      subscribe: this.userStore.subscribe
     }
   }
 
@@ -125,11 +115,7 @@ export default class SvelteKitPocketBase {
 
     if (event.url.pathname.startsWith(this.syncRoute)) {
       return await this.handleSync(event)
-    } else if (event.url.pathname.startsWith(this.logoutRoute)) {
-      // return await this.handleLogout()
     }
-
-    event.locals.user = this.pb.authStore.model
 
     return false
   }
@@ -171,15 +157,6 @@ export default class SvelteKitPocketBase {
     return response
   }
 
-  // private async handleLogout(): Promise<Response> {
-  //   this.pb.authStore.clear()
-  //   const response = json({
-  //     hasUpdate: true
-  //   })
-  //   this.addCookie(response)
-  //   return response
-  // }
-
   private addCookie(response: Response): Response {
     response.headers.append('set-cookie', this.pb.authStore.exportToCookie())
     return response
@@ -188,9 +165,8 @@ export default class SvelteKitPocketBase {
   /**
    * Client code for syncing the auth state with the server
    */
-  private async authSync(): Promise<void> {
-    // console.log('Syncing auth')
-    const response = (await fetch(this.syncRoute, {
+  private async authSync(): Promise<boolean> {
+    const result = await fetch(this.syncRoute, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -200,28 +176,13 @@ export default class SvelteKitPocketBase {
         token: this.pb.authStore.token,
         model: this.pb.authStore.model
       })
-    }).then((res) => res.json())) as SyncJsonType
-    if (response.hasUpdate) {
-      this.pb.authStore.save(response.token || '', response.model)
+    })
+
+    if (!result.ok) {
+      console.error('Auth sync failed:', result.status, result.statusText)
+      return false
     }
+
+    return true
   }
-
-  /**
-   * Client code for logging out
-   */
-  // private async authLogout(): Promise<boolean> {
-  //   const response = (await fetch(this.logoutRoute, {
-  //     method: 'POST',
-  //     headers: {
-  //       'Content-Type': 'application/json'
-  //     }
-  //   }).then((res) => res.json())) as SyncJsonType
-
-  //   if (!response.hasUpdate) {
-  //     return false
-  //   }
-
-  //   this.pb.authStore.clear()
-  //   return true
-  // }
 }
