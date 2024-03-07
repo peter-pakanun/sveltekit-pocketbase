@@ -8,19 +8,19 @@
 
   There's a lot of ways to interact with PocketBase in SvelteKit, but none of them that I can find can be used in both SSR and CSR environments. This library aims to provide a way to interact with PocketBase in both environments.
 
-  It also comes with a Svelte store to manage the user state.
+  It also comes with a Svelte store that show the user's model.
 
 ## How it work
 
-  First, the library follow the same steps as [PocketBase JavaScript SDK's SSR Integration](https://github.com/pocketbase/js-sdk#ssr-integration) to authenticate the user each time the page is loaded in the server by checking the user's cookie. If the user is authenticated, the user's session will be stored in the server's `pb` instance.
+  First, the library follow the same steps as [PocketBase JavaScript SDK's SSR Integration](https://github.com/pocketbase/js-sdk#ssr-integration) to authenticate the user each time the page is loaded in the server by checking the user's cookie. If the user is authenticated, the user's session will be stored in the server's `pb` instance. This also trigger the $user store to be updated with the correct user's model.
 
   This ensures that the user's session is always available in the server if the client has valid cookie, and the `pb` instance can be used to fetch the data in the server with the same credential as the client.
 
   Then, the library provides a way to sync the user's session with the server by create an internal route to handle the user's session. This route will be called each time the user's session is updated in the client, and the server will update the user's session accordingly.
 
-  The library also comes with a Svelte store to manage the user state, which will automatically sync the user's session with the server each time the store content is updated.
+  The library also comes with a Svelte store to read user model, which will be updated automatically each time the user's session is updated in the client.
 
-  This mean you can use the `pb` instance on the client to first authenticate the user, and then use the `$user` store to sync the user's session to server by simply updating the variable.
+  This mean you can use the `pb` instance on the client to first authenticate the user, and then use the `$user` store to read the user's information. The `pb` and `$user` can be use anywhere in the app—no matter if it's SSR or CSR mode—to fetch the data, login, logout, etc.
 
 ## Install
 
@@ -34,18 +34,36 @@
   // src/lib/db.js
   import SvelteKitPocketBase from 'sveltekit-pocketbase';
 
-  const pbAdapter = new SvelteKitPocketBase();
+  const pbAdapter = new SvelteKitPocketBase({
+    pbBaseUrl: "http://127.0.0.1:8090", // pocketbase server base url
+    syncRoute: "/users/sync", // Route to use internally for authentication syncing
+  })
 
   export const pb = pbAdapter.pb;
   export const user = pbAdapter.user;
   export const handleHook = pbAdapter.handleHook;
   ```
-  > Optionally, you can pass the `config` object to the `SvelteKitPocketBase` constructor.
+  > You can types the `pb` instance by type assertion using (TypeScript)[https://github.com/pocketbase/js-sdk?tab=readme-ov-file#specify-typescript-definitions] or JSDoc comments like this:
   ```javascript
-  const pbAdapter = new SvelteKitPocketBase({
-    pbBaseUrl: "http://127.0.0.1:8090", // pocketbase server base url
-    syncRoute: "/users/sync", // Route to use internally for authentication syncing
-  })
+  /**
+   * @typedef User
+   * @property {string} id
+   * @property {string} email
+   * 
+   * @typedef Post
+   * @property {string} id
+   * @property {string} title
+   * @property {boolean} active
+   *
+   * @typedef {import('pocketbase').default & {
+   *   collection(idOrName: string): import('pocketbase').RecordService
+   *   collection(idOrName: 'users'): import('pocketbase').RecordService<User>
+   *   collection(idOrName: 'posts'): import('pocketbase').RecordService<Post>
+   * }} TypedPocketBase
+   * 
+   * @type {TypedPocketBase}
+   */
+  export const pb = pbAdapter.pb;
   ```
 
   Create `src/hooks.server.js` file if not already exists and put in the hook handler.
@@ -70,24 +88,16 @@
   This library comes with a Svelte store to manage the user state.
   Here's an example of one way to access the store:
 
-  1. Create a `src/lib/stores.js` file and export the user store.
-  ```javascript
-  import { user } from "$lib/db";
-  // the rest of your stores...
-  export { user, /* ... */ }
-  ```
-  > Note: as the pocketbase instance was already initialized in `src/lib/db.js`, you can directly import the `user` store from `db` instance.
-
-  2. Use the store in your components.
+  Use the store in your components.
   ```svelte
   <script>
-    import { user } from '$lib/stores';
+    import { pb, user } from '$lib/db';
   </script>
 
   {#if $user}
-    Logged in as {$user.email} <button on:click={() => $user = null}>Logout</button>
+    Logged in as {$user.email} <button on:click={() => pb.authStore.clear()}>Logout</button>
   {:else}
-    <a href="/users/login">Login</a>
+    <button on:click={() => pb.collection('users').authWithOAuth2({ provider: 'google' })}>Login with Google</button>
   {/if}
   ```
 
@@ -104,7 +114,7 @@
   /** @type {import('./$types').PageLoad} */
   export async function load() {
     return {
-      items: (await pb.collection('test').getList(1, 10)).items,
+      items: (await pb.collection('posts').getList(1, 20)).items,
     };
   };
   ```
@@ -117,34 +127,30 @@
   </script>
   ```
   ```
-  > { items: [ { id: '1', name: 'test' } ] }
+  > [ { id: '1', title: 'test', active: true } ]
   ```
-  In this example, the data loading was performed in `+page.js` which can be run in both SSR and CSR environments. If the user access the page for the first time, the data will be loaded in the server using client's cookie to authenticate with pocketbase API, rendered and sent to the client. If the user navigates to the page from another page within the app, the data will be fetched in the client directly.
+  In this example, the data loading was performed in `+page.js` which can be run in both SSR and CSR environments. If the user access the page for the first time, the data will be loaded in the server using client's cookie to authenticate with pocketbase API, rendered and sent to the client. If the user navigates to the page from another page within the app, the data will be fetched from the client directly.
 
 ## Authentication
 
-  To authenticate the user, you can use the same method as the PocketBase JavaScript SDK. And after the user is authenticated, you must sync the user's session with the server by storing the user model in the user store.
-
-  This must be done in the client, not in the server, because the server does not have access to the user's localstorage used internally by the PocketBase SDK.
+  To authenticate the user, you can use the same method as the PocketBase JavaScript SDK from the client. The library do not support authentication from the server at the moment.
 
   Example Login:
   ```javascript
   import { pb } from '$lib/db';
-
   // auth with email and password
   const { token, record } = await pb.collection('users').authWithPassword('test@example.com', '123456');
-
-  // store the user model in the user store
-  $user = record;
+  // ...or auth with OAuth2
+  const { token, record } = await pb.collection('users').authWithOAuth2({ provider: 'google' });
   ```
 
-  To logout the user, you can simply set the user store to `null`. This will also trigger the sync route to remove the user's session from the server.
-
+  Example Logout:
   ```javascript
-  $user = null;
+  import { pb } from '$lib/db';
+  pb.authStore.clear();
   ```
 
-  Note: The user's session will be automatically synced with the server each time the client initializes the library (first time the page is loaded).
+  Note: The user's session will be automatically synced with the server once the client initializes the library (first time the page is loaded), and each time the authStore changed.
 
 ## Contributing
 
