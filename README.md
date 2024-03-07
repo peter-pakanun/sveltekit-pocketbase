@@ -46,7 +46,7 @@
   export const handleHook = pbAdapter.handleHook;
   export const hookFetchHandler = pbAdapter.hookFetchHandler;
   ```
-  > You can types the `pb` instance by type assertion using (TypeScript)[https://github.com/pocketbase/js-sdk?tab=readme-ov-file#specify-typescript-definitions] or JSDoc comments like this:
+  > You can types the `pb` instance by type assertion using [TypeScript](https://github.com/pocketbase/js-sdk?tab=readme-ov-file#specify-typescript-definitions) or JSDoc comments like this:
   ```javascript
   /**
    * @typedef User
@@ -203,7 +203,7 @@
   ```
   > [ { id: '1', title: 'test', active: true } ]
   ```
-  In this example, the data loading was performed in `+page.js` which can be run in both SSR and CSR environments. If the user access the page for the first time, the data will be loaded in the server using client's cookie to authenticate with PocketBase API, rendered and sent to the client. But if users navigates to the page from another page within the app, the data will be fetched by the browser directly.
+  In this example, the data loading was performed in `+page.js` which can be run in both SSR and CSR environments. If the user access the page for the first time, the data will be loaded by the server using client's cookie to authenticate with PocketBase API, rendered and sent to the client. But if users navigates to the page from another page within the app, the data will be fetched by the browser directly.
 
 ## Authentication
 
