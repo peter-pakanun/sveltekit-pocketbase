@@ -33,11 +33,12 @@
   ```javascript
   // src/lib/db.js
   import SvelteKitPocketBase from 'sveltekit-pocketbase';
+  import { browser } from '$app/environment';
 
   const pbAdapter = new SvelteKitPocketBase({
     pbBaseUrl: "http://127.0.0.1:8090", // pocketbase server base url
     syncRoute: "/users/sync", // Route used internally for authentication syncing
-  })
+  }, browser)
 
   export const pb = pbAdapter.pb;
   export const getPB = pbAdapter.getPB;

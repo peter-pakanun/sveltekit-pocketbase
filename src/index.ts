@@ -6,7 +6,6 @@ import {
   type ResolveOptions
 } from '@sveltejs/kit'
 import { writable, type Writable } from 'svelte/store'
-import { BROWSER } from 'esm-env-robust'
 
 interface SvelteKitPocketBaseConfig {
   /**
@@ -56,24 +55,27 @@ export default class SvelteKitPocketBase {
   user: Writable<AuthModel>
 
   private syncRoute: string
+  private isBrowser = false
 
   /**
    * Create a new SvelteKitPocketBase instance.
    *
    * @param options options for the SvelteKitPocketBase
    */
-  constructor(options?: SvelteKitPocketBaseConfig) {
+  constructor(options?: SvelteKitPocketBaseConfig, _isBrowser = false) {
     const defaultOptions = {
       pbBaseUrl: 'http://127.0.0.1:8090',
       syncRoute: '/users/sync'
     }
     const { pbBaseUrl, syncRoute } = { ...defaultOptions, ...options }
 
+    this.isBrowser = _isBrowser
+
     this.syncRoute = syncRoute
 
     this.pb = new PocketBase(pbBaseUrl)
 
-    if (BROWSER) {
+    if (this.isBrowser) {
       // Auto update the user store in the browser
       this.pb.authStore.onChange(async (_token, model) => {
         await this.authSync()
@@ -81,7 +83,7 @@ export default class SvelteKitPocketBase {
       })
     }
 
-    if (!BROWSER) {
+    if (!this.isBrowser) {
       // Disable auto cancellation on the server
       this.pb.autoCancellation(false)
     }
@@ -94,7 +96,7 @@ export default class SvelteKitPocketBase {
    * This is to avoid Cloudflare Workers' limitations on shared I/O.
    */
   getPB = (): PocketBase => {
-    if (BROWSER) {
+    if (this.isBrowser) {
       return this.pb
     }
     const _pb = new PocketBase(this.pb.baseUrl)
