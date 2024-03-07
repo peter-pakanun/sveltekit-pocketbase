@@ -83,17 +83,66 @@
   }
   ```
 
+  This library put authModel into server's `locals` object, so you need to define it in `src/app.d.ts` file.
+  ```typescript
+  import { type AuthModel } from 'pocketbase'
+
+  // See https://kit.svelte.dev/docs/types#app
+  // for information about these interfaces
+  declare global {
+    namespace App {
+      // interface Error {}
+      interface Locals {
+        user: AuthModel
+      }
+      // interface PageData {}
+      // interface PageState {}
+      // interface Platform {}
+    }
+  }
+
+  export {};
+  ```
+
 ## Svelte Store
 
   This library comes with a Svelte store to manage the user state.
-  Here's an example of one way to access the store:
+  Beware, the store on the server is shared, so you should not use the store directly in the server. More infomation can be found in the [SvelteKit documentation](https://kit.svelte.dev/docs/state-management#using-stores-with-context).
+  Here's an example of one way to access the store safely:
+  ```javascript
+  // +layout.server.js
 
-  Use the store in your components.
+  /** @type {import('./$types').LayoutServerLoad} */
+  export async function load({ locals }) {
+    return {
+      user: locals.user,
+    };
+  }
+  ```
+
+  And in `+layout.svelte` file:
   ```svelte
   <script>
-    import { pb, user } from '$lib/db';
-  </script>
+    import { setContext } from "svelte";
+    import { user } from "$lib/db";
 
+    /** @type {import('./$types').LayoutData} */
+    export let data;
+
+    $: user.set(data.user);
+    setContext("user", user);
+  </script>
+  ```
+
+  Now you can use the `$user` store anywhere in the app to read the user's information.
+  ```svelte
+  <script>
+    import { pb } from '$lib/db';
+    import { getContext } from 'svelte';
+
+    const user = getContext('user');
+  </script>
+  
   {#if $user}
     Logged in as {$user.email} <button on:click={() => pb.authStore.clear()}>Logout</button>
   {:else}

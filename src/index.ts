@@ -5,7 +5,7 @@ import {
   type RequestEvent,
   type ResolveOptions
 } from '@sveltejs/kit'
-import { writable, type Writable, type Readable } from 'svelte/store'
+import { writable, type Writable } from 'svelte/store'
 import { BROWSER } from 'esm-env-robust'
 
 interface SvelteKitPocketBaseConfig {
@@ -47,9 +47,8 @@ export default class SvelteKitPocketBase {
    * The user store.
    * This store is synced with the `pb.authStore.model`
    */
-  user: Readable<AuthModel>
+  user: Writable<AuthModel>
 
-  private userStore: Writable<AuthModel>
   private syncRoute: string
 
   /**
@@ -71,7 +70,7 @@ export default class SvelteKitPocketBase {
       if (BROWSER) {
         await this.authSync()
       }
-      this.userStore.set(model)
+      this.user.set(model)
     })
 
     if (!BROWSER) {
@@ -79,10 +78,7 @@ export default class SvelteKitPocketBase {
       this.pb.autoCancellation(false)
     }
 
-    this.userStore = writable<AuthModel>(this.pb.authStore.model)
-    this.user = {
-      subscribe: this.userStore.subscribe
-    }
+    this.user = writable<AuthModel>(this.pb.authStore.model)
   }
 
   /**
@@ -117,6 +113,8 @@ export default class SvelteKitPocketBase {
       // clear the auth store on failed refresh
       this.pb.authStore.clear()
     }
+
+    event.locals.user = this.pb.authStore.model
 
     if (event.url.pathname.startsWith(this.syncRoute)) {
       return await this.handleSync(event)
