@@ -1,6 +1,6 @@
 {
   "name": "sveltekit-pocketbase",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "A SvelteKit adapter for PocketBase that work on both SSR & CSR mode",
   "main": "./dist/index",
   "types": "./dist/index",

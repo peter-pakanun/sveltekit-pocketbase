@@ -40,6 +40,7 @@
   })
 
   export const pb = pbAdapter.pb;
+  export const getPB = pbAdapter.getPB;
   export const user = pbAdapter.user;
   export const handleHook = pbAdapter.handleHook;
   export const hookFetchHandler = pbAdapter.hookFetchHandler;
@@ -65,6 +66,8 @@
    * @type {TypedPocketBase}
    */
   export const pb = pbAdapter.pb;
+  /** @type {() => TypedPocketBase} */
+  export const getPB = pbAdapter.getPB;
   ```
 
   Create `src/hooks.server.js` file if not already exists and put in the handlers.
@@ -163,20 +166,22 @@
 
 ## Usage
 
-  You can use the `pb` instance to interact with PocketBase in both SSR and CSR environments.
+  You can use the `getPB()` function to get the `pb` instance to interact with PocketBase in both SSR and CSR environments.
   Refer to the [PocketBase JavaScript SDK](https://github.com/pocketbase/js-sdk) for more information.
+  
+  `getPB()` is required because Cloudflare Workers does not support reuse of I/O objects across requests, so you need to create a new `pb` instance each time you want to interact with PocketBase.
 
   Don't forget to supply SvelteKit `fetch` object so the library can attach authentication headers to the request by the server.
 
   Example Loading Data:
   ```javascript
   // src/routes/+page.js
-  import { pb } from '$lib/db';
+  import { getPB } from '$lib/db';
 
   /** @type {import('./$types').PageLoad} */
   export async function load({ fetch }) {
     return {
-      items: (await pb.collection('posts').getList(1, 20, { fetch })).items,
+      items: (await getPB().collection('posts').getList(1, 20, { fetch })).items,
     };
   };
   ```

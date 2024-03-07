@@ -90,6 +90,18 @@ export default class SvelteKitPocketBase {
   }
 
   /**
+   * Get the PocketBase instance.
+   * This is to avoid Cloudflare Workers' limitations on shared I/O.
+   */
+  getPB(): PocketBase {
+    if (BROWSER) {
+      return this.pb
+    }
+    const _pb = new PocketBase(this.pb.baseUrl)
+    return _pb
+  }
+
+  /**
    * Hook for SvelteKit to handle authentication
    * It take handle's input and return a response or false if the hook is not handled
    *
