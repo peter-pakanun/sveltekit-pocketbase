@@ -110,7 +110,7 @@ export default class SvelteKitPocketBase<
   get pb(): PBType {
     if (import.meta.env.SSR) {
       // Create a new PocketBase instance for each request, to avoid Cloudflare Workers' limitations on shared I/O
-      const _pb = new PocketBase(this.pb.baseUrl) as PBType
+      const _pb = new PocketBase(this._pb.baseUrl) as PBType
       _pb.autoCancellation(false)
       return _pb
     }
@@ -220,9 +220,9 @@ export default class SvelteKitPocketBase<
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        isValid: this.pb.authStore.isValid,
-        token: this.pb.authStore.token,
-        model: this.pb.authStore.model
+        isValid: this._pb.authStore.isValid,
+        token: this._pb.authStore.token,
+        model: this._pb.authStore.model
       })
     })
 
