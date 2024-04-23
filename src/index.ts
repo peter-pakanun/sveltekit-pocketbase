@@ -19,6 +19,12 @@ interface SvelteKitPocketBaseConfig {
    * @default '/users/sync'
    */
   syncRoute?: string
+
+  /**
+   * User collection name
+   * @default 'users'
+   */
+  userCollection?: string
 }
 
 type HookHandlerT = (input: {
@@ -39,68 +45,76 @@ type SyncJsonType = {
   model?: AuthModel
 }
 
-export default class SvelteKitPocketBase {
+export default class SvelteKitPocketBase<
+  PBType extends PocketBase = PocketBase,
+  UserModel = AuthModel
+> {
   /**
-   * The PocketBase instance.
+   * The private PocketBase instance.
    * You can use this to access the PocketBase API.
    *
    * @see {@link https://github.com/pocketbase/js-sdk | PocketBase JS SDK}
    */
-  pb: PocketBase
+  private _pb: PBType
 
   /**
-   * The user store.
+   * The user svelte store.
    * This store is synced with the `pb.authStore.model`
    */
-  user: Writable<AuthModel>
+  user: Writable<UserModel | null>
 
   private syncRoute: string
-  private isBrowser = false
+  private userCollection: string
 
   /**
    * Create a new SvelteKitPocketBase instance.
    *
    * @param options options for the SvelteKitPocketBase
    */
-  constructor(options?: SvelteKitPocketBaseConfig, _isBrowser = false) {
+  constructor(options?: SvelteKitPocketBaseConfig) {
     const defaultOptions = {
       pbBaseUrl: 'http://127.0.0.1:8090',
-      syncRoute: '/users/sync'
+      syncRoute: '/users/sync',
+      userCollection: 'users'
     }
-    const { pbBaseUrl, syncRoute } = { ...defaultOptions, ...options }
-
-    this.isBrowser = _isBrowser
+    const { pbBaseUrl, syncRoute, userCollection } = {
+      ...defaultOptions,
+      ...options
+    }
 
     this.syncRoute = syncRoute
+    this.userCollection = userCollection
 
-    this.pb = new PocketBase(pbBaseUrl)
+    this._pb = new PocketBase(pbBaseUrl) as PBType
 
-    if (this.isBrowser) {
+    if (import.meta.env.SSR) {
+      // Disable auto cancellation on the server
+      this._pb.autoCancellation(false)
+    } else {
       // Auto update the user store in the browser
-      this.pb.authStore.onChange(async (_token, model) => {
+      this._pb.authStore.onChange(async (_token, model) => {
         await this.authSync()
-        this.user.set(model)
+        this.user.set(model as UserModel)
       })
     }
 
-    if (!this.isBrowser) {
-      // Disable auto cancellation on the server
-      this.pb.autoCancellation(false)
-    }
-
-    this.user = writable<AuthModel>(this.pb.authStore.model)
+    this.user = writable<UserModel | null>(
+      this._pb.authStore.model as UserModel
+    )
   }
 
   /**
    * Get the PocketBase instance.
    * This is to avoid Cloudflare Workers' limitations on shared I/O.
    */
-  getPB = (): PocketBase => {
-    if (this.isBrowser) {
-      return this.pb
+  get pb(): PBType {
+    if (import.meta.env.SSR) {
+      // Create a new PocketBase instance for each request, to avoid Cloudflare Workers' limitations on shared I/O
+      const _pb = new PocketBase(this.pb.baseUrl) as PBType
+      _pb.autoCancellation(false)
+      return _pb
     }
-    const _pb = new PocketBase(this.pb.baseUrl)
-    return _pb
+    return this._pb
   }
 
   /**
@@ -108,10 +122,10 @@ export default class SvelteKitPocketBase {
    * It take handle's input and return a response or false if the hook is not handled
    *
    * @example
-   * ```js
-   * // src/hooks.server.js
+   * ```typescript
+   * // src/hooks.server.ts
    * import { hookHandler } from "$lib/db";
-   * export async function handle({ event, resolve }) {
+   * export const handle: Handle = async ({ event, resolve }) => {
    *   let response = await hookHandler({ event, resolve });
    *   if (response !== false) {
    *     return response;
@@ -120,11 +134,11 @@ export default class SvelteKitPocketBase {
    *   response = await resolve(event);
    *
    *   return response;
-   * }
+   * };
    * ```
    */
   hookHandler: HookHandlerT = async ({ event }) => {
-    event.locals.pb = new PocketBase(this.pb.baseUrl)
+    event.locals.pb = this.pb
 
     // load the store data from the request cookie string
     event.locals.pb.authStore.loadFromCookie(
@@ -134,13 +148,13 @@ export default class SvelteKitPocketBase {
     try {
       // get an up-to-date auth store state by verifying and refreshing the loaded auth model (if any)
       event.locals.pb.authStore.isValid &&
-        (await event.locals.pb.collection('users').authRefresh())
+        (await event.locals.pb.collection(this.userCollection).authRefresh())
     } catch (_) {
       // clear the auth store on failed refresh
       event.locals.pb.authStore.clear()
     }
 
-    this.user.set(event.locals.pb.authStore.model)
+    this.user.set(event.locals.pb.authStore.model as UserModel)
 
     if (event.url.pathname.startsWith(this.syncRoute)) {
       return await this.handleSync(event)
@@ -225,17 +239,17 @@ export default class SvelteKitPocketBase {
    * It take handleFetch's input and return a response or false if the hook is not handled
    *
    * @example
-   * ```js
-   * // src/hooks.server.js
+   * ```typescript
+   * // src/hooks.server.ts
    * import { hookFetchHandler } from "$lib/db";
-   * export async function handleFetch({ event, request, fetch }) {
-   *   let response = await hookFetchHandler({ event, request, fetch });
+   * export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
+   *   const response = await hookFetchHandler({ event, request, fetch });
    *   if (response !== false) {
    *     return response;
    *   }
    *
    *   return fetch(request);
-   * }
+   * };
    * ```
    */
   hookFetchHandler: HookFetchHandlerT = async ({ event, request, fetch }) => {
