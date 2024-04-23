@@ -43,7 +43,7 @@
   },
   "dependencies": {
     "@sveltejs/kit": "^2.0.0",
-    "pocketbase": "^0.21.1",
+    "pocketbase": "^0.21.2",
     "svelte": "^4.2.12"
   }
 }
