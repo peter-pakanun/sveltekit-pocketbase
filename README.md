@@ -47,7 +47,7 @@
 
   export const pb = pbAdapter.pb;
   export const user = pbAdapter.user;
-  export const handleHook = pbAdapter.handleHook;
+  export const hookHandler = pbAdapter.hookHandler;
   export const hookFetchHandler = pbAdapter.hookFetchHandler;
   ```
 
@@ -117,25 +117,28 @@
 
   And in `+layout.svelte` file:
   ```svelte
-  <script>
-	  import type { LayoutData } from './$types';
-    import { setContext } from "svelte";
-    import { user } from "$lib/db";
+  <script lang="ts">
+    import '../app.pcss';
+    import { setContext } from 'svelte';
+    import { user } from '$lib/db';
 
-    export let data: LayoutData;
+    export let data;
 
     $: user.set(data.user);
-    setContext("user", user);
+    setContext('user', user);
   </script>
+
+  <slot></slot>
   ```
 
   Now you can get the `$user` store anywhere in the app to read the user's information.
   ```svelte
-  <script>
+  <script lang="ts">
     import { pb } from '$lib/db';
+    import type { user as UserStoreType } from '$lib/db';
     import { getContext } from 'svelte';
 
-    const user = getContext('user');
+    const user = getContext<typeof UserStoreType>('user');
   </script>
   
   {#if $user}
